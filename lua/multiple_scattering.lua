@@ -1,7 +1,7 @@
 ﻿-- Buffer B is the multiple-scattering LUT. Each pixel coordinate corresponds to a height and sun zenith angle, and
 -- the value is the multiple scattering approximation (Psi_ms from the paper, Eq. 10).
 local groundAlbedo = vec(0.3, 0.3, 0.3)
-local mulScattSteps = 4.0 --20
+local mulScattSteps = 20
 local sqrtSamples = 8.0
 
 
@@ -29,14 +29,20 @@ function getRayleighPhase(cosTheta)
 end
 
 function getValFromTLUT(pos, sunDir)
-    --local height = length(pos);
-    --local up = pos / height;
-    --local sunCosZenithAngle = dot(sunDir, up);
+    -- local height = length(pos);
+    -- local up = pos / height;
+    -- local sunCosZenithAngle = dot(sunDir, up);
 
-    --local uv = vec2(tLUTRes.x*clamp(0.5 + 0.5*sunCosZenithAngle, 0.0, 1.0),
-    --               tLUTRes.y*max(0.0, min(1.0, (height - groundRadiusMM)/(atmosphereRadiusMM - groundRadiusMM))));
+    -- local u = clamp(0.5 + 0.5*sunCosZenithAngle, 0.0, 1.0)
+    -- local v = max(0.0, min(1.0, (height - groundRadiusMM)/(atmosphereRadiusMM - groundRadiusMM)))
 
-    --uv = uv / bufferRes;
+    -- local sunCosTheta = 2.0*u - 1.0
+    -- local sunTheta = safeacos(sunCosTheta)
+    -- local height = mix(groundRadiusMM, atmosphereRadiusMM, v)
+    
+    -- local pos2 = vec(0.0, height, 0.0)
+    -- local sunDir2 = normalize(vec(0.0, sunCosTheta, -sin(sunTheta)))
+    
     return getSunTransmittance(pos, sunDir)
 end
 
@@ -45,9 +51,9 @@ function getMulScattValues(pos, sunDir)
     local lumTotal = vec(0.0, 0.0, 0.0)
     local fms = vec(0.0, 0.0, 0.0)
     
-    local invSamples = rcp(sqrtSamples^2)
-    for i = 0.0,sqrtSamples,1.0 do
-        for j = 0.0,sqrtSamples,1.0 do
+    local invSamples = 1.0 / sqrtSamples^2
+    for i = 0.0,sqrtSamples-1.0,1.0 do
+        for j = 0.0,sqrtSamples-1.0,1.0 do
             -- This integral is symmetric about theta = 0 (or theta = PI), so we
             -- only need to integrate from zero to PI, not zero to 2*PI.
             local theta = PI * (i + 0.5) / sqrtSamples
@@ -72,7 +78,7 @@ function getMulScattValues(pos, sunDir)
             local transmittance = vec(1.0, 1.0, 1.0)
             local t = 0.0
 
-            for stepI = 0.0,mulScattSteps,1.0 do
+            for stepI = 0.0,mulScattSteps-1,1.0 do
                 local newT = ((stepI + 0.3) / mulScattSteps) * tMax
                 local dt = newT - t
                 t = newT
@@ -88,7 +94,7 @@ function getMulScattValues(pos, sunDir)
                 
                 -- This is slightly different from the paper, but I think the paper has a mistake?
                 -- In equation (6), I think S(x,w_s) should be S(x-tv,w_s).
-                local sunTransmittance = getValFromTLUT(newPos, sunDir)
+                local sunTransmittance = getSunTransmittance(newPos, sunDir) --getValFromTLUT(newPos, sunDir)
 
                 local rayleighInScattering = rayleighScattering * rayleighPhaseValue
                 local mieInScattering = mieScattering * miePhaseValue
@@ -105,7 +111,7 @@ function getMulScattValues(pos, sunDir)
                 local hitPos = pos + groundDist*rayDir
                 if dot(pos, sunDir) > 0.0 then
                     hitPos = normalize(hitPos) * groundRadiusMM
-                    lum = lum + transmittance * groundAlbedo * getValFromTLUT(hitPos, sunDir)
+                    lum = lum + transmittance * groundAlbedo * getSunTransmittance(hitPos, sunDir) --getValFromTLUT(hitPos, sunDir)
                 end
             end
             
@@ -117,19 +123,18 @@ function getMulScattValues(pos, sunDir)
     return lumTotal, fms
 end
 
-function processPixel(x, y)
-    local u = (x + 0.5) / imageWidth
-    local v = (y + 0.5) / imageHeight
-
-    local sunCosTheta = 2.0*u - 1.0
+function processTexel(x, y)
+    local sunCosTheta = 2.0*x - 1.0
     local sunTheta = safeacos(sunCosTheta)
-    local height = mix(groundRadiusMM, atmosphereRadiusMM, v)
+    local height = mix(groundRadiusMM, atmosphereRadiusMM, y)
     
     local pos = vec(0.0, height, 0.0)
     local sunDir = normalize(vec(0.0, sunCosTheta, -sin(sunTheta)))
     
-    local lum, f_ms = getMulScattValues(pos, sunDir);
+    local lum, f_ms = getMulScattValues(pos, sunDir)
     
     -- Equation 10 from the paper.
-    return lum  / (1.0 - f_ms); 
+    local result = lum / (1.0 - f_ms)
+    --result = result^(1.0/2.2)
+    return result
 end

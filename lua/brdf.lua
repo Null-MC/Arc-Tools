@@ -61,10 +61,7 @@ function GeometrySmith(N, V, L, roughness)
     return ggx1 * ggx2;
 end
 
-function processPixel(x, y)
-	local NoV = x / imageWidth
-	local roughness = y / imageHeight
-
+function processTexel(NoV, roughness)
 	local V = vec(sqrt(1.0 - NoV^2), 0.0, NoV)
 	local result = vec(0.0, 0.0)
 	local N = vec(0.0, 0.0, 1.0)

@@ -1,11 +1,20 @@
-﻿groundRadiusMM = 2.360
-atmosphereRadiusMM = 2.370
-ozoneAbsorptionBase = vec(0.650, 1.881, 0.085)
-mieScatteringBase = 3.996 * 10
-mieAbsorptionBase = 4.4 * 10
-rayleighScatteringBase = vec(5.802, 13.558, 33.1)*2
-rayleighAbsorptionBase = 4.0
-transmittanceSteps = 80
+﻿groundRadiusMM = 1.360
+atmosphereRadiusMM = 1.385
+ozoneAbsorptionBase = vec(0.650, 1.881, 0.085) * 2.0
+mieScatteringBase = 3.996
+mieAbsorptionBase = 4.4
+rayleighScatteringBase = vec(5.802, 13.558, 33.1) * 2.0
+rayleighAbsorptionBase = 1.0
+
+-- groundRadiusMM = 2.360
+-- atmosphereRadiusMM = 2.370
+-- ozoneAbsorptionBase = vec(0.650, 1.881, 0.085)
+-- mieScatteringBase = 3.996 * 10
+-- mieAbsorptionBase = 4.4 * 10
+-- rayleighScatteringBase = vec(5.802, 13.558, 33.1)*2
+-- rayleighAbsorptionBase = 4.0
+
+transmittanceSteps = 40
 
 
 function safeacos(x)
@@ -61,7 +70,7 @@ function getSunTransmittance(pos, sunDir)
     local transmittance = vec(1.0, 1.0, 1.0)
     local t = 0.0
 
-    for i = 0,transmittanceSteps,1 do
+    for i = 0,transmittanceSteps-1,1 do
         local newT = ((i + 0.3) / transmittanceSteps) * atmoDist
         local dt = newT - t
         t = newT
