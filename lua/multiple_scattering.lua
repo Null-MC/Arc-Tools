@@ -2,7 +2,7 @@
 
 -- Buffer B is the multiple-scattering LUT. Each pixel coordinate corresponds to a height and sun zenith angle, and
 -- the value is the multiple scattering approximation (Psi_ms from the paper, Eq. 10).
-local groundAlbedo = vec(0.3, 0.3, 0.3)
+local groundAlbedo = vec3(0.3)
 local mulScattSteps = 20
 local sqrtSamples = 8.0
 
@@ -30,25 +30,26 @@ function getRayleighPhase(cosTheta)
     return k * (1.0 + cosTheta^2)
 end
 
-function getValFromTLUT(pos, sunDir, rain)
-    local height = length(pos);
-    local up = pos / height;
-    local sunCosZenithAngle = dot(sunDir, up);
+function getValFromTLUT(pos, sunDir, atmosType)
+    local height = length(pos)
+    local up = pos / height
+    local sunCosZenithAngle = dot(sunDir, up)
 
-    local u = clamp(0.5 + 0.5*sunCosZenithAngle, 0.0, 1.0)
-    local v = max(0.0, min(1.0, (height - groundRadiusMM) / (atmosphereRadiusMM - groundRadiusMM)))
+    local u = saturate(0.5 + 0.5*sunCosZenithAngle)
+    local v = saturate((height - groundRadiusMM) / (atmosphereRadiusMM - groundRadiusMM))
+    local z = getAtmosTypeZ(atmosType)
 
-    return texture('sun_transmission', vec(u, v, rain)).rgb;
+    return texture('sun_transmission', vec(u, v, z)).rgb
 end
 
 -- Calculates Equation (5) and (7) from the paper.
-function getMulScattValues(pos, sunDir, rain)
-    local lumTotal = vec(0.0, 0.0, 0.0)
-    local fms = vec(0.0, 0.0, 0.0)
+function getMulScattValues(pos, sunDir, atmosType)
+    local lumTotal = vec3(0.0)
+    local fms = vec3(0.0)
     
     local invSamples = 1.0 / sqrtSamples^2
-    for i = 0.0,sqrtSamples-1.0,1.0 do
-        for j = 0.0,sqrtSamples-1.0,1.0 do
+    for i = 0.0, sqrtSamples - 1.0 do
+        for j = 0.0, sqrtSamples - 1.0 do
             -- This integral is symmetric about theta = 0 (or theta = PI), so we
             -- only need to integrate from zero to PI, not zero to 2*PI.
             local theta = PI * (i + 0.5) / sqrtSamples
@@ -68,18 +69,18 @@ function getMulScattValues(pos, sunDir, rain)
             local miePhaseValue = getMiePhase(cosTheta)
             local rayleighPhaseValue = getRayleighPhase(-cosTheta)
             
-            local lum = vec(0.0, 0.0, 0.0)
-            local lumFactor = vec(0.0, 0.0, 0.0)
-            local transmittance = vec(1.0, 1.0, 1.0)
+            local lum = vec3(0.0)
+            local lumFactor = vec3(0.0)
+            local transmittance = vec3(1.0)
             local t = 0.0
 
-            for stepI = 0.0,mulScattSteps-1,1.0 do
+            for stepI = 0, mulScattSteps - 1 do
                 local newT = ((stepI + 0.3) / mulScattSteps) * tMax
                 local dt = newT - t
                 t = newT
 
                 local newPos = pos + t*rayDir
-                local rayleighScattering, mieScattering, extinction = getScatteringValues(newPos, rain)
+                local rayleighScattering, mieScattering, extinction = getScatteringValues(newPos, atmosType)
                 local sampleTransmittance = exp(-dt*extinction)
                 
                 -- Integrate within each segment.
@@ -89,7 +90,7 @@ function getMulScattValues(pos, sunDir, rain)
                 
                 -- This is slightly different from the paper, but I think the paper has a mistake?
                 -- In equation (6), I think S(x,w_s) should be S(x-tv,w_s).
-                local sunTransmittance = getValFromTLUT(newPos, sunDir, rain)
+                local sunTransmittance = getValFromTLUT(newPos, sunDir, atmosType)
 
                 local rayleighInScattering = rayleighScattering * rayleighPhaseValue
                 local mieInScattering = mieScattering * miePhaseValue
@@ -106,7 +107,7 @@ function getMulScattValues(pos, sunDir, rain)
                 local hitPos = pos + groundDist*rayDir
                 if dot(pos, sunDir) > 0.0 then
                     hitPos = normalize(hitPos) * groundRadiusMM
-                    lum = lum + transmittance * groundAlbedo * getValFromTLUT(hitPos, sunDir, rain)
+                    lum = lum + transmittance * groundAlbedo * getValFromTLUT(hitPos, sunDir, atmosType)
                 end
             end
             
@@ -125,18 +126,9 @@ function processTexel(x, y, z)
     
     local pos = vec(0.0, height, 0.0)
     local sunDir = normalize(vec(0.0, sunCosTheta, -sin(sunTheta)))
+    local atmosType = getAtmosType(z)
     
-    local rain = 0.0
-    if imageDepth > 1 then
-        rain = z - (0.5 / imageDepth)
-        rain = rain * imageDepth
-        rain = rain / (imageDepth - 1)
-    end
+    local lum, f_ms = getMulScattValues(pos, sunDir, atmosType)
     
-    local lum, f_ms = getMulScattValues(pos, sunDir, rain)
-    
-    -- Equation 10 from the paper.
-    local result = lum / (1.0 - f_ms)
-    --result = result^(1.0/2.2)
-    return result
+    return lum / (1.0 - f_ms)
 end

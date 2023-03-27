@@ -10,13 +10,7 @@ function processTexel(x, y, z)
     
     local pos = vec(0.0, height, 0.0)
     local sunDir = normalize(vec(0.0, sunCosTheta, -sin(sunTheta)))
-
-    local rain = 0.0
-    if imageDepth > 1 then
-        rain = z - (0.5 / imageDepth)
-        rain = rain * imageDepth
-        rain = rain / (imageDepth - 1)
-    end
+    local atmosType = getAtmosType(z)
     
-    return getSunTransmittance(pos, sunDir, rain)
+    return getSunTransmittance(pos, sunDir, atmosType)
 end

@@ -3,7 +3,7 @@
     local denom = 1.0
     local result = 0.0
 
-    for i = 0,32,1 do
+    for i = 1, 32 do
         if (n > 0) then
             local denom = mod(n, 2.0)
             result = result + denom * invBase
@@ -20,7 +20,7 @@ function Hammersley(i, N)
 end
 
 function ImportanceSampleGGX(Xi, N, roughness)
-    local a = roughness*roughness
+    local a = roughness^2
 	
     local phi = 2.0 * PI * Xi.x
     local cosTheta = sqrt((1.0 - Xi.y) / (1.0 + (a*a - 1.0) * Xi.y))
@@ -46,7 +46,7 @@ end
 
 function GeometrySchlickGGX(NoV, roughness)
     local a = roughness;
-    local k = (a * a) / 2.0;
+    local k = a^2 / 2.0;
 
     local denom = NoV * (1.0 - k) + k;
     return NoV / denom;
@@ -63,10 +63,10 @@ end
 
 function processTexel(NoV, roughness)
 	local V = vec(sqrt(1.0 - NoV^2), 0.0, NoV)
-	local result = vec(0.0, 0.0)
 	local N = vec(0.0, 0.0, 1.0)
+    local result = vec2(0.0)
 
-	for i = 0,SAMPLE_COUNT,1 do
+	for i = 0, SAMPLE_COUNT do
 		local Xi = Hammersley(i, SAMPLE_COUNT)
 		local H = ImportanceSampleGGX(Xi, N, roughness)
 		local L = normalize(H * dot(V, H) * 2.0 - V)
